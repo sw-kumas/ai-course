@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev": "slidev slides.md",
-    "build": "slidev build slides.md",
-    "export": "slidev export slides.md"
+    "dev": "slidev slides-01.md",
+    "build": "slidev build slides-01.md",
+    "export": "slidev export slides-01.md"
   },
   "devDependencies": {
     "@slidev/cli": "52.15.2",

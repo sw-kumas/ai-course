@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Course</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f9fafb;
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+  .wrap { max-width: 560px; width: 100%; padding: 2rem; }
+  .eyebrow { color: #2563eb; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem; }
+  h1 { color: #111827; font-size: 2rem; margin: 0; }
+  .list { list-style: none; padding: 0; margin: 1.8rem 0 0; display: grid; gap: 0.8rem; }
+  .item {
+    display: block;
+    padding: 1.2rem 1.4rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    text-decoration: none;
+    color: #111827;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  }
+  .item:hover {
+    border-color: #2563eb;
+    box-shadow: 0 8px 24px rgb(37 99 235 / 12%);
+    transform: translateY(-2px);
+  }
+  .item .num { color: #2563eb; font-weight: 800; font-size: 0.85rem; }
+  .item .title { display: block; font-size: 1.15rem; font-weight: 700; margin-top: 0.2rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">AI Course</p>
+    <h1>プレゼンテーション一覧</h1>
+    <ul class="list">
+      <li>
+        <a class="item" href="/ai-course/01/">
+          <span class="num">01</span>
+          <span class="title">LLMの基礎知識</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</body>
+</html>
