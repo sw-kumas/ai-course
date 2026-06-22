@@ -29,32 +29,31 @@ pnpm run export     # PDF/PPTX エクスポート（要 playwright-chromium）
 ## Building for GitHub Pages
 
 このプロジェクトは `sw-kumas.github.io/ai-course/` のサブディレクトリに配布される。
-history モードの SPA ルーターは GitHub Pages のサブディレクトリと致命的に相性が悪いため、**hash ルーターを使う**。
 
-`slides.md` の headmatter に `routerMode: hash` が設定済み。
+**2 段階ビルド**が必要：
+1. `--base /` でルーターをクリーンに（hash URL が `#/1`, `#/2` になる）
+2. 資産パス `/assets/` を `./assets/` に後処理（CDN URL は触らない）
 
 ```bash
-# ✅ 正しい — hash ルーター + 絶対パスでビルド
-pnpm exec slidev build slides.md --base /ai-course/
+# ビルド
+pnpm exec slidev build slides.md --base /
 
-# ❌ 誤り① — 相対パス。資産は読めるがルーターが /1, /2 に飛んで 404
-pnpm exec slidev build slides.md --base ./
-
-# ❌ 誤り② — history ルーターで絶対パス。ルーターが二重プレフィックス (/ai-course/ai-course/2) になる
-#              （headmatter に routerMode: hash がない場合）
-pnpm exec slidev build slides.md --base /ai-course/
+# 資産パスを相対に（CDN の favicon 等は置換しないよう注意）
+sed -i '' 's|\(["'\''=]\)/assets/|\1./assets/|g' dist/index.html dist/404.html
 ```
 
-`package.json` の `build` スクリプトには `--base` が含まれていないため、GitHub Pages 用には必ず `pnpm exec slidev build slides.md --base /ai-course/` を手動実行すること。
+`package.json` の `build` スクリプトには `--base` が含まれていないため、
+GitHub Pages 用には必ず上記を手動実行すること。
 
 ## Deployment
 
 GitHub Pages（ブランチ：`gh-pages`）。手順：
 
 ```bash
-# 1. main ブランチでビルド
+# 1. main ブランチで 2 段階ビルド
 git checkout main
-pnpm exec slidev build slides.md --base /ai-course/
+pnpm exec slidev build slides.md --base /
+sed -i '' 's|\(["'\''=]\)/assets/|\1./assets/|g' dist/index.html dist/404.html
 
 # 2. gh-pages に切り替えて中身を差し替え
 git checkout gh-pages
@@ -132,18 +131,19 @@ routerMode: hash           # GitHub Pages サブディレクトリ用。history 
 
 ### GitHub Pages サブディレクトリとルーター（最重要）
 
-GitHub Pages のプロジェクトサイト（`user.github.io/repo-name/`）に SPA を配布する場合、
-history モードのルーターは以下の理由で機能しない：
+GitHub Pages のプロジェクトサイト（`user.github.io/repo-name/`）で SPA の history ルーターは死亡する。
+hash ルーターでも `--base /repo-name/` を使うと hash パスに base が注入されて `#/repo-name/2` になり、
+ルーターがルート解決に失敗する。
 
-1. **直接 URL アクセスで 404**：`/ai-course/2` にブラウザで直接アクセスすると、GitHub Pages が
-   そのパスのファイルを探しに行き、見つからず 404 を返す。
-2. **ナビゲーションで二重プレフィックス**：`--base /ai-course/` + history モードの組み合わせで、
-   ルーターが `/ai-course/ai-course/2` のような壊れた URL を生成する。
-3. **`--base ./` で資産は読めるがルーティング死亡**：ルーターが `/1`, `/2` のようなルート直下の
-   URL を生成し、GitHub Pages のサブディレクトリと一致しない。
+**唯一動く組み合わせ**：
+1. headmatter に `routerMode: hash`
+2. ビルド時 `--base /`（ルーターをクリーンに）
+3. ビルド後 `sed` で資産パス `/assets/` → `./assets/`（CDN URL は触らない）
 
-**解決策**：`routerMode: hash` を headmatter に設定。URL が `/#/1`, `/#/2` になり、
-`#` 以降はブラウザが処理するためサーバーリクエストが発生しない。
+この 3 点を守らないと以下のいずれかが起きる：
+- 直接 URL アクセスで 404
+- ナビゲーションで `#/ai-course/2` のような壊れた hash URL
+- 資産（CSS/JS）が読み込めず白画面
 
 ### gh-pages に dist/ をそのまま入れてはいけない
 
@@ -158,10 +158,11 @@ cp dist/_redirects .
 cp -r dist/assets .
 ```
 
-### `base` headmatter フィールドは無効
+### `base` headmatter フィールドと `--base` CLI フラグ
 
-Slidev の headmatter に `base: /ai-course/` と書いても**一切効かない**。
-base は CLI の `--base` フラグでのみ設定可能。
+- headmatter の `base:` は**無効**。CLI の `--base` のみ有効。
+- `--base` は Vite の base を設定し、資産パスとルーター base の**両方**に影響する。
+  この副作用を避けるため、資産パスはビルド後の `sed` で個別に調整する。
 
 ### 開発サーバーのポート
 
