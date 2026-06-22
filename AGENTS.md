@@ -30,38 +30,30 @@ pnpm run export     # PDF/PPTX エクスポート（要 playwright-chromium）
 
 このプロジェクトは `sw-kumas.github.io/ai-course/` のサブディレクトリに配布される。
 
-**2 段階ビルド**が必要：
-1. `--base /` でルーターをクリーンに（hash URL が `#/1`, `#/2` になる）
-2. 資産パス `/assets/` を `./assets/` に後処理（CDN URL は触らない）
-
 ```bash
-# ビルド
-pnpm exec slidev build slides.md --base /
-
-# 資産パスを相対に（CDN の favicon 等は置換しないよう注意）
-sed -i '' 's|\(["'\''=]\)/assets/|\1./assets/|g' dist/index.html dist/404.html
+# ビルド（--base で資産パスとルーター base を /ai-course/ に統一）
+pnpm exec slidev build slides.md --base /ai-course/
 ```
 
 `package.json` の `build` スクリプトには `--base` が含まれていないため、
-GitHub Pages 用には必ず上記を手動実行すること。
+GitHub Pages 用には必ず `pnpm exec slidev build slides.md --base /ai-course/` を手動実行すること。
 
 ## Deployment
 
 GitHub Pages（ブランチ：`gh-pages`）。手順：
 
 ```bash
-# 1. main ブランチで 2 段階ビルド
+# 1. main ブランチでビルド
 git checkout main
-pnpm exec slidev build slides.md --base /
-sed -i '' 's|\(["'\''=]\)/assets/|\1./assets/|g' dist/index.html dist/404.html
+pnpm exec slidev build slides.md --base /ai-course/
 
 # 2. gh-pages に切り替えて中身を差し替え
 git checkout gh-pages
 rm -rf * .gitignore
-cp /path/to/main/dist/index.html .
-cp /path/to/main/dist/404.html .
-cp /path/to/main/dist/_redirects .
-cp -r /path/to/main/dist/assets .
+cp dist/index.html .
+cp dist/404.html .
+cp dist/_redirects .
+cp -r dist/assets .
 
 # 3. コミット＆プッシュ
 git add -A
@@ -73,7 +65,7 @@ git checkout main
 ```
 
 ⚠️ **絶対に `cp -r dist /tmp/...` してから `cp -r /tmp/.../* .` してはいけない。**
-`dist/` がサブディレクトリとしてコピーされる。必ず `dist/` の**中身のファイル**を 1 つずつルートにコピーすること。
+`dist/` がサブディレクトリとしてコピーされるバグがある。必ず `dist/` の**中身のファイル**を 1 つずつルートにコピーすること。
 
 ビルド状況の確認：
 
@@ -124,26 +116,27 @@ title: LLMの基礎知識
 transition: fade
 canvasWidth: 980
 aspectRatio: 16/9
-routerMode: hash           # GitHub Pages サブディレクトリ用。history だと SPA ルーターが壊れる
 ```
 
 ## Common Gotchas
 
-### GitHub Pages サブディレクトリとルーター（最重要）
+### Slidev v52.16.0 のバグに注意（最重要）
 
-GitHub Pages のプロジェクトサイト（`user.github.io/repo-name/`）で SPA の history ルーターは死亡する。
-hash ルーターでも `--base /repo-name/` を使うと hash パスに base が注入されて `#/repo-name/2` になり、
-ルーターがルート解決に失敗する。
+`@slidev/cli@52.16.0` には [issue #2635](https://github.com/slidevjs/slidev/issues/2635) の regression がある。
+`getSlidePath` が base 付きパスを返すのに router history も base を持つため、
+ナビゲーション時に base が二重に付与されて `/ai-course/ai-course/2` → 404 になる。
+history モードも hash モードも両方死ぬ。
 
-**唯一動く組み合わせ**：
-1. headmatter に `routerMode: hash`
-2. ビルド時 `--base /`（ルーターをクリーンに）
-3. ビルド後 `sed` で資産パス `/assets/` → `./assets/`（CDN URL は触らない）
+**対策**：`@slidev/cli` を `52.15.2` に正確固定（`package.json` に caret なしで `"52.15.2"`）。
+このバージョンは `getSlidePath` が base なしパスを返すので正常に動く。
 
-この 3 点を守らないと以下のいずれかが起きる：
-- 直接 URL アクセスで 404
-- ナビゲーションで `#/ai-course/2` のような壊れた hash URL
-- 資産（CSS/JS）が読み込めず白画面
+### GitHub Pages サブディレクトリ配布の正しい手順
+
+1. `@slidev/cli@52.15.2` を使う（↑）
+2. ビルド時 `--base /ai-course/`（資産パスもルーター base も正しく /ai-course/ になる）
+3. `404.html` は Slidev が `index.html` と同一内容で生成 → そのまま gh-pages ルートに置く
+4. 直接 `/ai-course/N` にアクセスすると GitHub Pages は 404 ステータス + `404.html`(=SPA) を返す。
+   ブラウザは SPA を読み込み、router が URL を解決して該当スライドを表示。
 
 ### gh-pages に dist/ をそのまま入れてはいけない
 
@@ -158,11 +151,10 @@ cp dist/_redirects .
 cp -r dist/assets .
 ```
 
-### `base` headmatter フィールドと `--base` CLI フラグ
+### `base` headmatter フィールドは無効
 
-- headmatter の `base:` は**無効**。CLI の `--base` のみ有効。
-- `--base` は Vite の base を設定し、資産パスとルーター base の**両方**に影響する。
-  この副作用を避けるため、資産パスはビルド後の `sed` で個別に調整する。
+Slidev の headmatter に `base: /ai-course/` と書いても**一切効かない**。
+base は CLI の `--base` フラグでのみ設定可能。
 
 ### 開発サーバーのポート
 
