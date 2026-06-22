@@ -1,6 +1,7 @@
 ---
 theme: default
 title: LLMの基礎知識
+base: /ai-course/
 transition: fade
 canvasWidth: 980
 aspectRatio: 16/9
