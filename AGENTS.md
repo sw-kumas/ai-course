@@ -28,37 +28,53 @@ pnpm run export     # PDF/PPTX エクスポート（要 playwright-chromium）
 
 ## Building for GitHub Pages
 
-このプロジェクトは `sw-kumas.github.io/ai-course/` のサブディレクトリに配布される。資産パスは相対にしないとルーティングと衝突する：
+このプロジェクトは `sw-kumas.github.io/ai-course/` のサブディレクトリに配布される。
+history モードの SPA ルーターは GitHub Pages のサブディレクトリと致命的に相性が悪いため、**hash ルーターを使う**。
+
+`slides.md` の headmatter に `routerMode: hash` が設定済み。
 
 ```bash
-# ✅ 正しい — 相対パスでビルド
+# ✅ 正しい — hash ルーター + 絶対パスでビルド
+pnpm exec slidev build slides.md --base /ai-course/
+
+# ❌ 誤り① — 相対パス。資産は読めるがルーターが /1, /2 に飛んで 404
 pnpm exec slidev build slides.md --base ./
 
-# ❌ 誤り — 絶対パスにするとルーターが /ai-course/ai-course/2 になる
+# ❌ 誤り② — history ルーターで絶対パス。ルーターが二重プレフィックス (/ai-course/ai-course/2) になる
+#              （headmatter に routerMode: hash がない場合）
 pnpm exec slidev build slides.md --base /ai-course/
 ```
 
-`package.json` の `build` スクリプトには `--base` が含まれていないため、GitHub Pages 用には必ず `pnpm exec slidev build slides.md --base ./` を手動実行すること。
+`package.json` の `build` スクリプトには `--base` が含まれていないため、GitHub Pages 用には必ず `pnpm exec slidev build slides.md --base /ai-course/` を手動実行すること。
 
 ## Deployment
 
 GitHub Pages（ブランチ：`gh-pages`）。手順：
 
 ```bash
-# 1. ビルド
-pnpm exec slidev build slides.md --base ./
+# 1. main ブランチでビルド
+git checkout main
+pnpm exec slidev build slides.md --base /ai-course/
 
-# 2. dist を gh-pages にコピーしてプッシュ
+# 2. gh-pages に切り替えて中身を差し替え
 git checkout gh-pages
 rm -rf * .gitignore
-cp -r /path/to/main/dist/* .
+cp /path/to/main/dist/index.html .
+cp /path/to/main/dist/404.html .
+cp /path/to/main/dist/_redirects .
+cp -r /path/to/main/dist/assets .
+
+# 3. コミット＆プッシュ
 git add -A
 git commit -m "deploy: update static site"
 git push origin gh-pages --force
 
-# 3. main に戻る
+# 4. main に戻る
 git checkout main
 ```
+
+⚠️ **絶対に `cp -r dist /tmp/...` してから `cp -r /tmp/.../* .` してはいけない。**
+`dist/` がサブディレクトリとしてコピーされる。必ず `dist/` の**中身のファイル**を 1 つずつルートにコピーすること。
 
 ビルド状況の確認：
 
@@ -109,12 +125,48 @@ title: LLMの基礎知識
 transition: fade
 canvasWidth: 980
 aspectRatio: 16/9
+routerMode: hash           # GitHub Pages サブディレクトリ用。history だと SPA ルーターが壊れる
 ```
 
 ## Common Gotchas
 
-1. **サブディレクトリ配布**：`--base ./` 必須。絶対パスにするとルーターが二重プレフィックスになる。
-2. **gh-pages に dist/ をそのまま入れてはいけない**：`dist/` の**中身**をブランチルートに置くこと。
-3. **`base` headmatter フィールドは無効**：Slidev の headmatter に `base: /ai-course/` と書いても効かない。CLI の `--base` のみ有効。
-4. **開発サーバーのポート**：`pnpm run dev` のポートは `3030` がデフォルトだが、占有時は自動で次（3031, 3032...）になる。
-5. **パッケージ追加時**：pnpm の lockfile のみをコミットし、`package-lock.json` は混在させないこと。
+### GitHub Pages サブディレクトリとルーター（最重要）
+
+GitHub Pages のプロジェクトサイト（`user.github.io/repo-name/`）に SPA を配布する場合、
+history モードのルーターは以下の理由で機能しない：
+
+1. **直接 URL アクセスで 404**：`/ai-course/2` にブラウザで直接アクセスすると、GitHub Pages が
+   そのパスのファイルを探しに行き、見つからず 404 を返す。
+2. **ナビゲーションで二重プレフィックス**：`--base /ai-course/` + history モードの組み合わせで、
+   ルーターが `/ai-course/ai-course/2` のような壊れた URL を生成する。
+3. **`--base ./` で資産は読めるがルーティング死亡**：ルーターが `/1`, `/2` のようなルート直下の
+   URL を生成し、GitHub Pages のサブディレクトリと一致しない。
+
+**解決策**：`routerMode: hash` を headmatter に設定。URL が `/#/1`, `/#/2` になり、
+`#` 以降はブラウザが処理するためサーバーリクエストが発生しない。
+
+### gh-pages に dist/ をそのまま入れてはいけない
+
+`dist/` の**中身**（`index.html`, `404.html`, `assets/`）を gh-pages ブランチのルートに置くこと。
+`cp -r dist /tmp/foo` → `cp -r /tmp/foo/* .` は `dist/` サブディレクトリごとコピーされるバグがある。
+代わりにファイルを 1 つずつコピーする：
+
+```bash
+cp dist/index.html .
+cp dist/404.html .
+cp dist/_redirects .
+cp -r dist/assets .
+```
+
+### `base` headmatter フィールドは無効
+
+Slidev の headmatter に `base: /ai-course/` と書いても**一切効かない**。
+base は CLI の `--base` フラグでのみ設定可能。
+
+### 開発サーバーのポート
+
+`pnpm run dev` のポートは `3030` がデフォルトだが、占有時は自動で次（3031, 3032...）になる。
+
+### パッケージ追加時
+
+pnpm の lockfile（`pnpm-lock.yaml`）のみをコミットし、`package-lock.json` を混在させないこと。
