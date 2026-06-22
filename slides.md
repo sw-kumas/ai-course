@@ -4,6 +4,7 @@ title: LLMの基礎知識
 transition: fade
 canvasWidth: 980
 aspectRatio: 16/9
+routerMode: hash
 layout: cover
 ---
 
